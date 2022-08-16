@@ -8,9 +8,6 @@ use std::{
 };
 pub use vach::prelude::*;
 
-#[cfg(test)]
-mod tests;
-
 /// An [`bevy_asset::AssetIo`] impl for [`vach`] formatted archives
 #[derive(Debug, Clone)]
 #[repr(transparent)]
