@@ -1,0 +1,8 @@
+[package]
+name = "bevy_vach"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy_asset = "0.8.0"
+vach = { version = "0.4.1", default-features = false, features = ["archive"] }
