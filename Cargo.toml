@@ -5,4 +5,9 @@ edition = "2021"
 
 [dependencies]
 bevy_asset = "0.8.0"
+bevy_ecs = "0.8.0"
 vach = { version = "0.4.1", default-features = false, features = ["archive"] }
+
+[features]
+vach_compression = ["vach/compression"]
+vach_crypto = ["vach/crypto"]

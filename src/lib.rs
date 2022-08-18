@@ -1,18 +1,53 @@
-#[deny(missing_docs)]
+#![deny(missing_docs)]
+
+/*!
+#### _A [`bevy_asset::AssetIo`] implementation for [`vach`] archives. Allowing for seamless use with an asset server_
+
+This crate exports the [`VachAssetIo`] struct. It is an implementation of [`bevy_asset::AssetIo`] for use in defining your own asset servers in newtypes.
+It in turn loads data from a [`vach`] archive, and hands it off to the [`AssetServer`](bevy_asset::AssetServer) for processing.
+Check out [`AssetServer::new`](bevy_asset::AssetServer) or the [`vach`] documentation for further usage documentation.
+
+#### Usage
+```
+use bevy_vach::VachAssetIo;
+use bevy::prelude::*;
+
+#[derive(Deref)]
+struct VachAssetServer<T>(AssetServer<VachAssetIo<T>>);
+
+fn main() {
+    let asset_io = VachAssetIo::from_path("assets.vach").unwrap();
+
+    App::new()
+        .insert_resource(VachAssetServer(asset_io))
+        .add_system(fetch_and_log)
+        .run()
+}
+
+fn fetch_and_log(asset_server: Res<VachAssetServer>) {
+    // Use asset_server here like any other asset server
+}
+
+```
+*/
+
 use bevy_asset::{AssetIo, AssetIoError, FileType, Metadata};
-use std::{
-    fs::File,
-    io,
-    path::{self, PathBuf},
-    sync::Arc,
-};
+use std::{fs::File, io, path};
 pub use vach::prelude::*;
 
 /// An [`bevy_asset::AssetIo`] impl for [`vach`] formatted archives
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct VachAssetIo<T> {
-    archive: Arc<Archive<T>>,
+    archive: Archive<T>,
+}
+
+/// Allows you to configure the [`VachAssetIo`] resource to be used in your app
+pub struct AssetIoConfig {
+    /// the path to load
+    pub path: path::PathBuf,
+    /// The [`ArchiveConfig`] to use when loading the archive
+    pub archive_config: ArchiveConfig,
 }
 
 impl<T> VachAssetIo<T> {
@@ -23,7 +58,7 @@ impl<T> VachAssetIo<T> {
     ) -> Result<VachAssetIo<File>, vach::prelude::InternalError> {
         let config = config.get_or_insert(Default::default());
         let source = File::open(path)?;
-        let archive = Arc::new(Archive::with_config(source, config)?);
+        let archive = Archive::with_config(source, config)?;
 
         Ok(VachAssetIo { archive })
     }
@@ -32,9 +67,7 @@ impl<T> VachAssetIo<T> {
 impl<T: io::Read + io::Seek> VachAssetIo<T> {
     /// Load a [VachAssetIo] source from a preconstructed [`Archive`], this allows you to use arbitrary archive sources other than files
     pub fn new(archive: Archive<T>) -> VachAssetIo<T> {
-        VachAssetIo {
-            archive: Arc::new(archive),
-        }
+        VachAssetIo { archive }
     }
 }
 
@@ -43,11 +76,9 @@ impl<T: io::Read + io::Seek + Sync + Send + 'static> AssetIo for VachAssetIo<T> 
         &'a self,
         path: &'a path::Path,
     ) -> bevy_asset::BoxedFuture<'a, Result<Vec<u8>, bevy_asset::AssetIoError>> {
-        let archive = Arc::clone(&self.archive);
-
         let block = async move {
             let str = path.to_string_lossy();
-            let resource = archive.fetch(str);
+            let resource = self.archive.fetch(str);
             match resource {
                 Ok(res) => Ok(res.data),
                 Err(err) => match err {
@@ -70,13 +101,13 @@ impl<T: io::Read + io::Seek + Sync + Send + 'static> AssetIo for VachAssetIo<T> 
         &self,
         path: &path::Path,
     ) -> Result<Box<dyn Iterator<Item = path::PathBuf>>, bevy_asset::AssetIoError> {
-        let archive = Arc::clone(&self.archive);
-        let iter = archive
+        let iter = self
+            .archive
             .entries()
             .into_iter()
             .map(|e| e.0)
             .filter(|id| id.starts_with(path.to_string_lossy().as_ref()))
-            .map(|id| PathBuf::from(id))
+            .map(|id| path::PathBuf::from(id))
             .collect::<Vec<_>>();
 
         Ok(Box::new(iter.into_iter()))
